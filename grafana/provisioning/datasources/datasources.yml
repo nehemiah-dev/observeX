@@ -1,0 +1,74 @@
+apiVersion: 1
+
+# All services run on the same host as Grafana (systemd, no Docker networking).
+# URLs use localhost. UIDs must match what dashboard JSON files reference.
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    url: http://localhost:9090
+    access: proxy
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      httpMethod: "POST"
+
+  - name: Loki
+    type: loki
+    uid: loki
+    url: http://localhost:3100
+    access: proxy
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        # Any log line containing traceID=<hex> will have the trace ID rendered
+        # as a clickable link that opens directly in Tempo.
+        - name: TraceID
+          matcherRegex: "traceID=([a-f0-9]+)"
+          url: "${__value.raw}"
+          datasourceUid: tempo
+          urlDisplayLabel: "Open in Tempo"
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    url: http://localhost:3200
+    access: proxy
+    editable: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        filterByTraceID: true
+        filterBySpanID: false
+        customQuery: false
+        tags:
+          - key: service.name
+            value: service_name
+          - key: instance
+            value: instance
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        tags:
+          - key: service.name
+            value: service
+        queries:
+          - name: "Request rate"
+            query: "sum(rate(http_requests_total{$__tags}[5m]))"
+          - name: "Error rate"
+            query: "sum(rate(http_requests_total{$__tags, status=~\"5..\"}[5m]))"
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki

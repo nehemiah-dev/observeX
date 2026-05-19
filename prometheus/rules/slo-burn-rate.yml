@@ -1,0 +1,180 @@
+groups:
+  - name: slo-burn-rate
+    interval: 60s
+    rules:
+
+      # RECORDING RULES
+      # Pre-compute error ratios for multiple windows to keep alert PromQL clean
+
+      - record: job:http_requests_total:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (job)
+
+      - record: job:http_requests_errors:rate5m
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) by (job)
+
+      - record: job:http_error_ratio:rate5m
+        expr: |
+          job:http_requests_errors:rate5m
+          / job:http_requests_total:rate5m
+
+      - record: job:http_error_ratio:rate30m
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[30m])) by (job)
+          / sum(rate(http_requests_total[30m])) by (job)
+
+      - record: job:http_error_ratio:rate1h
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[1h])) by (job)
+          / sum(rate(http_requests_total[1h])) by (job)
+
+      - record: job:http_error_ratio:rate6h
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[6h])) by (job)
+          / sum(rate(http_requests_total[6h])) by (job)
+
+      - record: job:http_error_ratio:rate3d
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[3d])) by (job)
+          / sum(rate(http_requests_total[3d])) by (job)
+
+      # ERROR RATE SLO — 99% SUCCESS TARGET
+      # Error budget = 1% over 30 days
+      # Burn rate = current error ratio / error budget ratio (0.01)
+
+      # Fast Burn — critical
+      # 14.4x burn rate means 2% of the monthly error budget is consumed in 1 hour.
+      # Both the 1h window AND the 5m window must exceed the threshold
+      # to prevent false positives from short transient spikes.
+      - alert: SLOFastBurn
+        expr: |
+          (
+            job:http_error_ratio:rate1h > (14.4 * 0.01)
+          )
+          and
+          (
+            job:http_error_ratio:rate5m > (14.4 * 0.01)
+          )
+        for: 2m
+        labels:
+          severity: critical
+          slo: error_rate
+          team: devops
+        annotations:
+          summary: "CRITICAL: SLO fast burn on {{ $labels.job }}"
+          description: |
+            Error ratio is {{ $value | humanizePercentage }} — burn rate is {{ $value | printf "%.1f" }}x the budget.
+            At this rate 2% of the monthly error budget will be consumed in 1 hour.
+            Immediate action required.
+          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
+          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-fast-burn.md"
+
+      # Slow Burn — warning
+      # 5x burn rate means 5% of the monthly error budget is consumed in 6 hours.
+      # Both the 6h window AND the 30m window must exceed the threshold.
+      - alert: SLOSlowBurn
+        expr: |
+          (
+            job:http_error_ratio:rate6h > (5 * 0.01)
+          )
+          and
+          (
+            job:http_error_ratio:rate30m > (5 * 0.01)
+          )
+        for: 15m
+        labels:
+          severity: warning
+          slo: error_rate
+          team: devops
+        annotations:
+          summary: "WARNING: SLO slow burn on {{ $labels.job }}"
+          description: |
+            Error ratio is {{ $value | humanizePercentage }} — burn rate is {{ $value | printf "%.1f" }}x the budget.
+            5% of the monthly error budget will be consumed in the next 6 hours if this continues.
+            Investigate before this escalates to a fast burn.
+          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
+          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-slow-burn.md"
+
+      # AVAILABILITY SLO — 99.5% UPTIME TARGET
+      # Based on Blackbox Exporter probe_success
+      # Error budget = 0.5% over 30 days = 216 minutes of downtime
+
+      - alert: AvailabilityFastBurn
+        expr: |
+          (
+            1 - avg_over_time(probe_success{job="blackbox-http"}[1h])
+          ) > (14.4 * 0.005)
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+          team: devops
+        annotations:
+          summary: "CRITICAL: Availability SLO fast burn — {{ $labels.instance }}"
+          description: |
+            Probe success rate over the last hour is below SLO.
+            Monthly availability budget burning at 14.4x normal rate.
+          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
+          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-fast-burn.md"
+
+      - alert: AvailabilitySlowBurn
+        expr: |
+          (
+            1 - avg_over_time(probe_success{job="blackbox-http"}[6h])
+          ) > (5 * 0.005)
+        for: 15m
+        labels:
+          severity: warning
+          slo: availability
+          team: devops
+        annotations:
+          summary: "WARNING: Availability SLO slow burn — {{ $labels.instance }}"
+          description: |
+            Probe success rate over the last 6 hours is degraded.
+            Monthly availability budget burning at 5x normal rate.
+          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
+          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-slow-burn.md"
+
+      # LATENCY SLO — 95% of REQUESTS < 500ms TARGET
+      # Error budget = 5% of requests may exceed 500ms
+
+      - alert: LatencyFastBurn
+        expr: |
+          (
+            1 - (
+              sum(rate(http_request_duration_seconds_bucket{le="0.5"}[1h]))
+              / sum(rate(http_request_duration_seconds_count[1h]))
+            )
+          ) > (14.4 * 0.05)
+        for: 2m
+        labels:
+          severity: critical
+          slo: latency
+          team: devops
+        annotations:
+          summary: "CRITICAL: Latency SLO fast burn"
+          description: |
+            Less than 95% of requests are completing under 500ms.
+            Latency budget burning at 14.4x normal rate.
+          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
+          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-fast-burn.md"
+
+      - alert: LatencySlowBurn
+        expr: |
+          (
+            1 - (
+              sum(rate(http_request_duration_seconds_bucket{le="0.5"}[6h]))
+              / sum(rate(http_request_duration_seconds_count[6h]))
+            )
+          ) > (5 * 0.05)
+        for: 15m
+        labels:
+          severity: warning
+          slo: latency
+          team: devops
+        annotations:
+          summary: "WARNING: Latency SLO slow burn"
+          description: |
+            Latency budget burning at 5x normal rate over the last 6 hours.
+            Investigate slow endpoints before this escalates.
+          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
+          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-slow-burn.md"

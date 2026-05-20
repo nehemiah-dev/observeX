@@ -6,7 +6,10 @@ variable "server_host" {
 variable "slack_webhook_url" {
   description = "Slack incoming webhook URL for Alertmanager to send notifications to #DevOps-Alerts"
   type        = string
+<<<<<<< HEAD
   sensitive   = true
+=======
+>>>>>>> 9f83d34 (delete default url)
 }
 
 variable "grafana_admin_password" {

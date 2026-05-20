@@ -69,7 +69,7 @@ receivers:
         actions:
           - type: button
             text: 'View Dashboard'
-            url: '{{ with (index .Alerts 0).Annotations.dashboard_url }}{{ . }}{{ else }}http://35.182.228.47:3000{{ end }}'
+            url: '{{ with (index .Alerts 0).Annotations.dashboard_url }}{{ . }}{{ else }}http://localhost:3000{{ end }}'
           - type: button
             text: 'View Runbook'
             url: '{{ with (index .Alerts 0).Annotations.runbook_url }}{{ . }}{{ else }}https://github.com/nehecodes/observeX/tree/main/runbooks{{ end }}'

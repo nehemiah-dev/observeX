@@ -1,29 +1,17 @@
 #!/usr/bin/env bash
 # install.sh — ObservaCore observability stack installer
-# Fixes applied (see inline FIX comments):
-#   #1  install_binary — explicit return 1 instead of implicit fall-through
-#   #2  Grafana sed — special-char-safe delimiter + escaping
-#   #3  grafana cli — --homepath flag added
-#   #4  cd /tmp — wrapped in subshells so cwd never bleeds
-#   #5  alertmanager tmpl glob — nullglob guard
-#   #6  prometheus rules glob — nullglob guard
-#   #7  reload || true — promtool validation gate before reload
-#   #8  pushgateway dir — explicit mkdir co-located with service unit
-#   #9  chown/chmod order — normalised to chmod then chown throughout
-#  #10  venv wipe — md5-hash gate; only recreate when requirements.txt changes
-#  #11  sleep 2 — replaced with wait_for_port() readiness check
-#  #12  SERVICES string — converted to proper bash array
 
 set -euo pipefail
 
-REPO_DIR="/home/admin/observeX"
+# TODO: confirm this resolves correctly when cloned — it sets REPO_DIR to
+# the directory containing this script, so the repo can live anywhere.
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_FILE="/var/log/observability-install.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 log "Starting installation from $REPO_DIR"
 
-# ── Kill anything holding apt locks ──────────────────────────────────────────
 log "Preparing apt..."
 systemctl stop unattended-upgrades 2>/dev/null || true
 systemctl disable unattended-upgrades 2>/dev/null || true
@@ -33,23 +21,20 @@ rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock \
       /var/cache/apt/archives/lock /var/lib/apt/lists/lock
 dpkg --configure -a 2>/dev/null || true
 
-# ── Base dependencies ─────────────────────────────────────────────────────────
 log "Installing dependencies..."
 DEBIAN_FRONTEND=noninteractive apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
     curl wget unzip tar git python3 python3-pip python3-venv \
     jq net-tools apt-transport-https netcat-openbsd
 
-# ── Create users ──────────────────────────────────────────────────────────────
-for user in prometheus alertmanager loki tempo otel node_exporter blackbox; do
+for user in prometheus alertmanager loki tempo node_exporter blackbox; do
     id "$user" &>/dev/null || useradd --no-create-home --shell /bin/false "$user"
     log "User ready: $user"
 done
 
-# ── Create directories ────────────────────────────────────────────────────────
 mkdir -p /var/lib/{prometheus,alertmanager,loki,tempo}
 mkdir -p /var/lib/tempo/{blocks,wal}
-mkdir -p /etc/{prometheus/rules,alertmanager/templates,loki,tempo,otel,blackbox}
+mkdir -p /etc/{prometheus/rules,alertmanager/templates,loki,tempo,blackbox}
 mkdir -p /var/log/observability
 
 chown prometheus:prometheus /var/lib/prometheus /etc/prometheus
@@ -57,7 +42,6 @@ chown alertmanager:alertmanager /var/lib/alertmanager /etc/alertmanager
 chown loki:loki /var/lib/loki /etc/loki
 chown tempo:tempo /var/lib/tempo /etc/tempo
 
-# ── Helper: download with retry ───────────────────────────────────────────────
 download() {
     local url=$1 dest=$2
     for attempt in 1 2 3; do
@@ -69,17 +53,15 @@ download() {
     exit 1
 }
 
-# ── FIX #1: install_binary — explicit returns; no more implicit fall-through ──
 install_binary() {
     local name="$1"
     if [ -x "/usr/local/bin/${name}" ]; then
         log "$name already installed, skipping download"
-        return 0   # already installed
+        return 0
     fi
-    return 1       # needs installing — explicit, not accidental
+    return 1
 }
 
-# ── FIX #11: wait_for_port — real readiness check instead of sleep 2 ─────────
 wait_for_port() {
     local svc=$1 port=$2
     local retries=15
@@ -99,7 +81,6 @@ wait_for_port() {
 PROMETHEUS_VERSION="2.51.2"
 if ! install_binary prometheus; then
     log "Installing Prometheus ${PROMETHEUS_VERSION}..."
-    # FIX #4: cd in subshell so cwd never bleeds into subsequent blocks
     (
         cd /tmp
         download "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" \
@@ -109,7 +90,6 @@ if ! install_binary prometheus; then
         cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"   /usr/local/bin/
         cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/consoles"          /etc/prometheus/
         cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/console_libraries" /etc/prometheus/
-        # FIX #9: chmod then chown — consistent order throughout
         chmod 755 /usr/local/bin/prometheus /usr/local/bin/promtool
         chown prometheus:prometheus /usr/local/bin/prometheus /usr/local/bin/promtool
     )
@@ -117,7 +97,12 @@ fi
 
 cp "$REPO_DIR/prometheus/prometheus.yml" /etc/prometheus/prometheus.yml
 
-# FIX #6: nullglob guard — don't let an empty rules/ glob abort the script
+# TODO: prometheus/prometheus.yml — add a scrape job pointing to the app
+# server's OTel Collector or app metrics endpoint, e.g.:
+#   - job_name: 'app-server'
+#     static_configs:
+#       - targets: ['<APP_SERVER_IP>:8889']   # OTel Collector metrics export port
+
 (
     shopt -s nullglob
     rule_files=("$REPO_DIR/prometheus/rules/"*.yml)
@@ -257,7 +242,6 @@ fi
 
 cp "$REPO_DIR/alertmanager/alertmanager.yml" /etc/alertmanager/
 
-# FIX #5: nullglob guard for template glob
 (
     shopt -s nullglob
     tmpl_files=("$REPO_DIR/alertmanager/templates/"*.tmpl)
@@ -268,7 +252,8 @@ cp "$REPO_DIR/alertmanager/alertmanager.yml" /etc/alertmanager/
     fi
 )
 
-# Inject the Slack webhook URL from the environment into the deployed config
+# TODO: set SLACK_WEBHOOK_URL in your environment before running,
+# or the alertmanager.yml placeholder will remain and alerts will not fire.
 if [ -n "${SLACK_WEBHOOK_URL}" ] && [ "${SLACK_WEBHOOK_URL}" != "replace this" ]; then
     sed -i "s|slack_api_url: 'replace this'|slack_api_url: '${SLACK_WEBHOOK_URL}'|" \
         /etc/alertmanager/alertmanager.yml
@@ -302,6 +287,10 @@ UNIT
 log "Alertmanager configured"
 
 # ── Loki ──────────────────────────────────────────────────────────────────────
+# TODO: on the app server, configure your log shipper (Promtail, Alloy, etc.)
+# to forward logs to this Loki instance:
+#   url: http://<THIS_SERVER_IP>:3100/loki/api/v1/push
+
 LOKI_VERSION="2.9.6"
 if ! install_binary loki; then
     log "Installing Loki ${LOKI_VERSION}..."
@@ -339,6 +328,13 @@ UNIT
 log "Loki configured"
 
 # ── Tempo ─────────────────────────────────────────────────────────────────────
+# TODO: on the app server, configure the OTel Collector to export traces here:
+#   exporters:
+#     otlp:
+#       endpoint: "<THIS_SERVER_IP>:4317"
+#       tls:
+#         insecure: true
+
 TEMPO_VERSION="2.4.1"
 if ! install_binary tempo; then
     log "Installing Tempo ${TEMPO_VERSION}..."
@@ -393,154 +389,19 @@ cp "$REPO_DIR/grafana/provisioning/dashboards/"*.yml  /etc/grafana/provisioning/
 cp "$REPO_DIR/grafana/dashboards/"*.json              /var/lib/grafana/dashboards/
 chown -R grafana:grafana /etc/grafana/provisioning /var/lib/grafana/dashboards
 
+# TODO: set GRAFANA_ADMIN_PASSWORD in your environment before running.
+# Leaving it unset defaults to 'admin' which is insecure in production.
 GRAFANA_PASS="${GRAFANA_ADMIN_PASSWORD:-admin}"
 
-# FIX #2: escape special characters in password before passing to sed
-# so that '/', '&', '\' in a password don't corrupt grafana.ini
 SAFE_PASS=$(printf '%s' "$GRAFANA_PASS" | sed 's/[&\\/]/\\&/g')
 sed -i "s|^;*admin_password = .*|admin_password = ${SAFE_PASS}|" /etc/grafana/grafana.ini
 sed -i 's|^;*admin_user = .*|admin_user = admin|'               /etc/grafana/grafana.ini
-log "Grafana admin password set (use GRAFANA_ADMIN_PASSWORD env var to override)"
 log "Grafana configured"
-
-# ── Pushgateway ───────────────────────────────────────────────────────────────
-# FIX #8: mkdir co-located with the service so persistence dir always exists
-# even if this section is run standalone or block order changes
-mkdir -p /var/lib/prometheus
-chown prometheus:prometheus /var/lib/prometheus
-
-PUSHGATEWAY_VERSION="1.8.0"
-if ! install_binary pushgateway; then
-    log "Installing Pushgateway ${PUSHGATEWAY_VERSION}..."
-    (
-        cd /tmp
-        download "https://github.com/prometheus/pushgateway/releases/download/v${PUSHGATEWAY_VERSION}/pushgateway-${PUSHGATEWAY_VERSION}.linux-amd64.tar.gz" \
-            "pushgateway.tar.gz"
-        tar -xzf pushgateway.tar.gz
-        cp "pushgateway-${PUSHGATEWAY_VERSION}.linux-amd64/pushgateway" /usr/local/bin/
-        chmod 755 /usr/local/bin/pushgateway
-        chown prometheus:prometheus /usr/local/bin/pushgateway
-    )
-fi
-
-cat > /etc/systemd/system/pushgateway.service << 'UNIT'
-[Unit]
-Description=Prometheus Pushgateway
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-User=prometheus
-Group=prometheus
-Type=simple
-Restart=always
-RestartSec=5s
-ExecStart=/usr/local/bin/pushgateway \
-    --web.listen-address=0.0.0.0:9091 \
-    --persistence.file=/var/lib/prometheus/pushgateway.db \
-    --persistence.interval=5m
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-log "Pushgateway configured"
-
-# ── Demo App ──────────────────────────────────────────────────────────────────
-if ! command -v python3 &>/dev/null; then
-    log "ERROR: python3 not found"
-    exit 1
-fi
-
-log "Installing demo app dependencies..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y python3-setuptools python3-pkg-resources
-
-mkdir -p /opt/demo-app
-cp "$REPO_DIR/demo-app/main.py"          /opt/demo-app/
-cp "$REPO_DIR/demo-app/requirements.txt" /opt/demo-app/
-
-# FIX #10: only wipe and recreate the venv when requirements.txt has changed.
-# On re-runs with no dependency changes this saves the full pip download time.
-REQ_HASH_FILE=/opt/demo-app/.req_hash
-NEW_HASH=$(md5sum /opt/demo-app/requirements.txt | cut -d' ' -f1)
-OLD_HASH=$(cat "$REQ_HASH_FILE" 2>/dev/null || echo "")
-
-if [ "$OLD_HASH" != "$NEW_HASH" ] || [ ! -d /opt/demo-app/venv ]; then
-    log "requirements.txt changed (or venv missing) — rebuilding venv..."
-    rm -rf /opt/demo-app/venv
-    python3 -m venv --system-site-packages /opt/demo-app/venv
-    /opt/demo-app/venv/bin/python -m pip install --quiet --upgrade pip
-    /opt/demo-app/venv/bin/python -m pip install --quiet -r /opt/demo-app/requirements.txt
-    echo "$NEW_HASH" > "$REQ_HASH_FILE"
-else
-    log "requirements.txt unchanged — reusing existing venv"
-fi
-
-id demo-app &>/dev/null || useradd --no-create-home --shell /bin/false demo-app
-chown -R demo-app:demo-app /opt/demo-app
-
-cat > /etc/systemd/system/demo-app.service << 'UNIT'
-[Unit]
-Description=ObservaCore Demo App
-Wants=network-online.target otelcol.service
-After=network-online.target otelcol.service
-
-[Service]
-User=demo-app
-Group=demo-app
-Type=simple
-Restart=always
-RestartSec=5s
-WorkingDirectory=/opt/demo-app
-Environment=OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
-ExecStart=/opt/demo-app/venv/bin/python main.py
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-log "Demo app configured"
-
-# ── OTel Collector ────────────────────────────────────────────────────────────
-OTEL_VERSION="0.97.0"
-if ! install_binary otelcol; then
-    log "Installing OTel Collector ${OTEL_VERSION}..."
-    (
-        cd /tmp
-        download "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz" \
-            "otelcol.tar.gz"
-        tar -xzf otelcol.tar.gz
-        cp otelcol-contrib /usr/local/bin/otelcol
-        chmod +x /usr/local/bin/otelcol
-        chown otel:otel /usr/local/bin/otelcol
-    )
-fi
-
-cp "$REPO_DIR/otel-collector/otel-collector-config.yml" /etc/otel/
-chown -R otel:otel /etc/otel
-
-cat > /etc/systemd/system/otelcol.service << 'UNIT'
-[Unit]
-Description=OpenTelemetry Collector
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-User=otel
-Group=otel
-Type=simple
-Restart=always
-RestartSec=5s
-ExecStart=/usr/local/bin/otelcol --config=/etc/otel/otel-collector-config.yml
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-log "OTel Collector configured"
 
 # ── Enable and start all services ─────────────────────────────────────────────
 log "Starting all services..."
 systemctl daemon-reload
 
-# FIX #12: proper bash array instead of unquoted string — safe for all names
 SERVICES=(
     prometheus
     node_exporter
@@ -549,13 +410,8 @@ SERVICES=(
     loki
     tempo
     grafana-server
-    otelcol
-    pushgateway
-    demo-app
 )
 
-# Port map for wait_for_port — otelcol uses its health-check extension port
-# FIX #11: wait_for_port called per-service instead of sleep 2
 declare -A SVC_PORT=(
     [prometheus]=9090
     [node_exporter]=9100
@@ -564,9 +420,6 @@ declare -A SVC_PORT=(
     [loki]=3100
     [tempo]=3200
     [grafana-server]=3000
-    [otelcol]=13133
-    [pushgateway]=9091
-    [demo-app]=8080
 )
 
 for svc in "${SERVICES[@]}"; do
@@ -589,9 +442,7 @@ log "Setting Grafana admin password via grafana-cli..."
 systemctl stop grafana-server
 sleep 2
 GRAFANA_BIN=$(command -v grafana || echo "/usr/bin/grafana")
-
-# FIX #3: pass --homepath explicitly so the CLI finds plugins/conf correctly
-# regardless of the working directory
+set +e
 CLI_OUTPUT=$(
     "${GRAFANA_BIN}" cli \
         --homepath /usr/share/grafana \
@@ -599,6 +450,7 @@ CLI_OUTPUT=$(
         admin reset-admin-password "${GRAFANA_PASS}" 2>&1
 )
 CLI_EXIT=$?
+set -e
 log "grafana cli output: ${CLI_OUTPUT}"
 if [ $CLI_EXIT -eq 0 ]; then
     log "Grafana admin password confirmed: admin/${GRAFANA_PASS}"
@@ -609,6 +461,8 @@ systemctl start grafana-server
 wait_for_port grafana-server 3000 || true
 
 # ── Resolve public IP ─────────────────────────────────────────────────────────
+# TODO: set SERVER_HOST in terraform.tfvars to avoid relying on metadata
+# endpoint fallback, which may not be available outside AWS/GCP.
 if [ -n "${SERVER_HOST:-}" ]; then
     PUBLIC_IP="${SERVER_HOST}"
     log "Using SERVER_HOST for public IP: ${PUBLIC_IP}"
@@ -618,29 +472,26 @@ else
         PUBLIC_IP=$(curl -sf --max-time 5 https://checkip.amazonaws.com 2>/dev/null | tr -d '[:space:]')
     fi
     if [ -z "${PUBLIC_IP}" ]; then
-        log "WARNING: Could not resolve public IP — alert dashboard links will use private IP. Set server_host in terraform.tfvars."
+        log "WARNING: Could not resolve public IP — dashboard links will use private IP."
         PUBLIC_IP=$(hostname -I | awk '{print $1}')
     fi
 fi
 
-# ── Patch dashboard_url in deployed configs ───────────────────────────────────
 GRAFANA_URL="http://${PUBLIC_IP}:3000"
 log "Patching dashboard URLs to ${GRAFANA_URL}..."
 for f in /etc/prometheus/rules/*.yml /etc/alertmanager/alertmanager.yml; do
     sed -i "s|http://localhost:3000|${GRAFANA_URL}|g" "$f"
 done
 
-# FIX #7: validate Prometheus config before reloading — don't silently leave
-# Prometheus on a stale config if the URL-patch introduced a syntax error
 if promtool check config /etc/prometheus/prometheus.yml > /dev/null 2>&1; then
-    systemctl reload prometheus
+    systemctl restart prometheus
     log "Prometheus config validated and reloaded"
 else
     log "ERROR: Prometheus config invalid after URL patch — NOT reloading. Check /etc/prometheus/prometheus.yml"
 fi
 
 if amtool check-config /etc/alertmanager/alertmanager.yml > /dev/null 2>&1; then
-    systemctl reload alertmanager
+    systemctl restart alertmanager
     log "Alertmanager config validated and reloaded"
 else
     log "ERROR: Alertmanager config invalid after URL patch — NOT reloading. Check /etc/alertmanager/alertmanager.yml"

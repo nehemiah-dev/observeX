@@ -65,8 +65,8 @@ groups:
             Error ratio is {{ $value | humanizePercentage }} — burn rate is {{ $value | printf "%.1f" }}x the budget.
             At this rate 2% of the monthly error budget will be consumed in 1 hour.
             Immediate action required.
-          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-fast-burn.md"
+          dashboard_url: "http://observex.duckdns.org/d/slo-error-budget"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/slo-fast-burn.md"
 
       # Slow Burn — warning
       # 5x burn rate means 5% of the monthly error budget is consumed in 6 hours.
@@ -91,8 +91,8 @@ groups:
             Error ratio is {{ $value | humanizePercentage }} — burn rate is {{ $value | printf "%.1f" }}x the budget.
             5% of the monthly error budget will be consumed in the next 6 hours if this continues.
             Investigate before this escalates to a fast burn.
-          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-slow-burn.md"
+          dashboard_url: "http://observex.duckdns.org/d/slo-error-budget"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/slo-slow-burn.md"
 
       # AVAILABILITY SLO — 99.5% UPTIME TARGET
       # Based on Blackbox Exporter probe_success
@@ -113,8 +113,8 @@ groups:
           description: |
             Probe success rate over the last hour is below SLO.
             Monthly availability budget burning at 14.4x normal rate.
-          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-fast-burn.md"
+          dashboard_url: "http://observex.duckdns.org/d/slo-error-budget"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/slo-fast-burn.md"
 
       - alert: AvailabilitySlowBurn
         expr: |
@@ -131,8 +131,8 @@ groups:
           description: |
             Probe success rate over the last 6 hours is degraded.
             Monthly availability budget burning at 5x normal rate.
-          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-slow-burn.md"
+          dashboard_url: "http://observex.duckdns.org/d/slo-error-budget"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/slo-slow-burn.md"
 
       # LATENCY SLO — 95% of REQUESTS < 500ms TARGET
       # Error budget = 5% of requests may exceed 500ms
@@ -155,8 +155,8 @@ groups:
           description: |
             Less than 95% of requests are completing under 500ms.
             Latency budget burning at 14.4x normal rate.
-          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-fast-burn.md"
+          dashboard_url: "http://observex.duckdns.org/d/slo-error-budget"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/slo-fast-burn.md"
 
       - alert: LatencySlowBurn
         expr: |
@@ -176,5 +176,5 @@ groups:
           description: |
             Latency budget burning at 5x normal rate over the last 6 hours.
             Investigate slow endpoints before this escalates.
-          dashboard_url: "http://35.182.228.47:3000/d/slo-error-budget"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/slo-slow-burn.md"
+          dashboard_url: "http://observex.duckdns.org/d/slo-error-budget"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/slo-slow-burn.md"

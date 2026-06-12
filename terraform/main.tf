@@ -17,15 +17,14 @@ resource "null_resource" "install_observability_stack" {
   }
 
   provisioner "file" {
-    source      = "/home/cybernerd/observeX"
-    destination = "/home/admin/observeX"
+    source      = "/opt/observeX"
+    destination = "/tmp/observeX"
   }
 
   provisioner "remote-exec" {
     inline = [
-      "ln -sf /home/admin/observeX/app /home/admin/observeX/demo-app",
-      "chmod +x /home/admin/observeX/terraform/scripts/install.sh",
-      "sudo GRAFANA_ADMIN_PASSWORD='${var.grafana_admin_password}' SLACK_WEBHOOK_URL='${var.slack_webhook_url}' SERVER_HOST='${var.server_host}' bash /home/admin/observeX/terraform/scripts/install.sh 2>&1 | tee /var/log/observability-install.log"
+      "chmod +x /tmp/observeX/scripts/install.sh",
+      "sudo GRAFANA_ADMIN_PASSWORD='${var.grafana_admin_password}' SLACK_WEBHOOK_URL='${var.slack_webhook_url}' SERVER_HOST='${var.server_host}' bash /tmp/observeX/scripts/install.sh 2>&1 | tee /var/log/observability-install.log"
     ]
   }
 }

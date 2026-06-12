@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — ObservaCore observability stack installer
+# install.sh — ObserveX observability stack installer
 
 set -euo pipefail
 
@@ -78,7 +78,7 @@ wait_for_port() {
 }
 
 # ── Prometheus ────────────────────────────────────────────────────────────────
-PROMETHEUS_VERSION="2.51.2"
+PROMETHEUS_VERSION="3.12.0"
 if ! install_binary prometheus; then
     log "Installing Prometheus ${PROMETHEUS_VERSION}..."
     (
@@ -88,8 +88,6 @@ if ! install_binary prometheus; then
         tar -xzf prometheus.tar.gz
         cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus" /usr/local/bin/
         cp "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"   /usr/local/bin/
-        cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/consoles"          /etc/prometheus/
-        cp -r "prometheus-${PROMETHEUS_VERSION}.linux-amd64/console_libraries" /etc/prometheus/
         chmod 755 /usr/local/bin/prometheus /usr/local/bin/promtool
         chown prometheus:prometheus /usr/local/bin/prometheus /usr/local/bin/promtool
     )
@@ -142,7 +140,7 @@ UNIT
 log "Prometheus configured"
 
 # ── Node Exporter ─────────────────────────────────────────────────────────────
-NODE_VERSION="1.7.0"
+NODE_VERSION="1.11.1"
 if ! install_binary node_exporter; then
     log "Installing Node Exporter ${NODE_VERSION}..."
     (
@@ -176,7 +174,7 @@ UNIT
 log "Node Exporter configured"
 
 # ── Blackbox Exporter ─────────────────────────────────────────────────────────
-BLACKBOX_VERSION="0.24.0"
+BLACKBOX_VERSION="0.28.0"
 if ! install_binary blackbox_exporter; then
     log "Installing Blackbox Exporter ${BLACKBOX_VERSION}..."
     (
@@ -225,7 +223,7 @@ UNIT
 log "Blackbox Exporter configured"
 
 # ── Alertmanager ──────────────────────────────────────────────────────────────
-ALERTMANAGER_VERSION="0.27.0"
+ALERTMANAGER_VERSION="0.32.2"
 if ! install_binary alertmanager; then
     log "Installing Alertmanager ${ALERTMANAGER_VERSION}..."
     (
@@ -291,7 +289,7 @@ log "Alertmanager configured"
 # to forward logs to this Loki instance:
 #   url: http://<THIS_SERVER_IP>:3100/loki/api/v1/push
 
-LOKI_VERSION="2.9.6"
+LOKI_VERSION="3.7.2"
 if ! install_binary loki; then
     log "Installing Loki ${LOKI_VERSION}..."
     (
@@ -387,7 +385,7 @@ mkdir -p /var/lib/grafana/dashboards
 cp "$REPO_DIR/grafana/provisioning/datasources/"*.yml /etc/grafana/provisioning/datasources/
 cp "$REPO_DIR/grafana/provisioning/dashboards/"*.yml  /etc/grafana/provisioning/dashboards/
 cp "$REPO_DIR/grafana/dashboards/"*.json              /var/lib/grafana/dashboards/
-chown -R grafana:grafana /etc/grafana/provisioning /var/lib/grafana/dashboards
+chown -R grafana:grafana /etc/grafana/provisioning /var/lib/grafana
 
 # TODO: set GRAFANA_ADMIN_PASSWORD in your environment before running.
 # Leaving it unset defaults to 'admin' which is insecure in production.

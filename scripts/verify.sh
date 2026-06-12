@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify.sh — ObservaCore observability stack health check
+# verify.sh — ObserveX observability stack health check
 # Fixes applied:
 #   #13  otelcol — health extension port 13133 added; was silently unverified
 #   #14  PUBLIC_IP curl — --max-time 3 added; avoids 75s hang on non-AWS hosts

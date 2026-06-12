@@ -43,13 +43,13 @@ All services run as native Linux binaries managed by **systemd**. No Docker.
 
 ```bash
 # 1. Clone the repo to the expected path on your server
-git clone https://github.com/nehecodes/observeX.git
+git clone https://github.com/nehemiah-dev/observeX.git
 
 # 2. Set your Slack webhook URL before deploying
 sed -i "s/replace this/YOUR_SLACK_WEBHOOK_URL/" /home/admin/observeX/alertmanager/alertmanager.yml
 
 # 3. Run Terraform
-cd /home/ubuntu/observeX/terraform
+cd ~/observeX/terraform
 terraform init && terraform apply -auto-approve
 ```
 
@@ -71,61 +71,7 @@ curl http://localhost:3100/ready       # ready
 curl http://localhost:3200/ready       # ready
 
 # Or run the full automated health check (checks all services + HTTP endpoints):
-sudo bash /home/admin/observeX/scripts/verify.sh
-```
-
----
-
-## Repository Structure
-
-```
-observeX/
-├── .github/
-│   ├── workflows/deploy.yml          # CI/CD pipeline + DORA metric push
-│   └── PULL_REQUEST_TEMPLATE.md
-├── alertmanager/
-│   ├── alertmanager.yml              # Route tree + inhibition rules
-│   └── templates/slack.tmpl         # Structured Slack notification template
-├── game-day/
-│   ├── scenario-1-deployment-failure.md
-│   ├── scenario-2-latency-injection.md
-│   └── scenario-3-resource-pressure.md
-├── grafana/
-│   ├── dashboards/
-│   │   ├── dora-metrics.json
-│   │   ├── slo-error-budget.json
-│   │   ├── node-exporter.json
-│   │   ├── blackbox-exporter.json
-│   │   └── unified-observability.json
-│   └── provisioning/
-│       ├── dashboards/dashboards.yml
-│       └── datasources/datasources.yml
-├── loki/
-│   └── loki-config.yml
-├── otel-collector/
-│   └── otel-collector-config.yml
-├── prometheus/
-│   ├── prometheus.yml
-│   └── rules/
-│       ├── infrastructure.yml        # CPU, memory, disk, host down, SSL
-│       ├── slo-burn-rate.yml         # Multi-window fast/slow burn rate rules
-│       └── cicd.yml                  # CFR, MTTR, pipeline activity rules
-├── runbooks/
-│   ├── cpu-high.md
-│   ├── memory-high.md
-│   ├── disk-high.md
-│   ├── server-down.md
-│   ├── ssl-cert-expiry.md
-│   ├── slo-fast-burn.md
-│   ├── slo-slow-burn.md
-│   ├── high-cfr.md
-│   ├── cfr-threshold-exceeded.md
-│   └── mttr-exceeded.md
-├── slo/
-│   ├── slo-definitions.md
-│   └── error-budget-policy.md
-├── tempo/
-│   └── tempo-config.yml
+sudo bash ~/observeX/scripts/verify.sh
 ```
 
 ---

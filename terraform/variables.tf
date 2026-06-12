@@ -6,10 +6,8 @@ variable "server_host" {
 variable "slack_webhook_url" {
   description = "Slack incoming webhook URL for Alertmanager to send notifications to #DevOps-Alerts"
   type        = string
-<<<<<<< HEAD
   sensitive   = true
-=======
->>>>>>> 9f83d34 (delete default url)
+
 }
 
 variable "grafana_admin_password" {
@@ -51,5 +49,5 @@ variable "tempo_block_retention_hours" {
 variable "scripts_base_path" {
   description = "Absolute path on the target server where the install scripts live"
   type        = string
-  default     = "/home/admin/observability-platform/scripts"
+  default     = "/tmp/observeX/scripts"
 }

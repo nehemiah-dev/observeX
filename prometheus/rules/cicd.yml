@@ -1,73 +1,73 @@
 groups:
-  - name: cicd
+  - name: deployment
     interval: 60s
     rules:
 
       # RECORDING RULES
 
-      - record: cicd:deployment_failure_rate:ratio7d
+      - record: deployment_failure_rate:ratio7d
         expr: |
           sum(increase(github_actions_deployments_total{result=~"failure|rollback|hotfix"}[7d]))
           /
           sum(increase(github_actions_deployments_total[7d]))
 
-      - record: cicd:lead_time_seconds:avg
+      - record: deployment:lead_time_seconds:avg
         expr: avg(github_actions_lead_time_seconds)
 
-      - record: cicd:mttr_seconds:avg
+      - record: deployment:mttr_seconds:avg
         expr: avg(github_actions_incident_duration_seconds)
 
       # CHANGE FAILURE RATE
       # SLO threshold: CFR must stay below 10% on a rolling 7-day window
 
       - alert: CFRThresholdExceeded
-        expr: cicd:deployment_failure_rate:ratio7d * 100 > 10
+        expr: deployment_failure_rate:ratio7d * 100 > 10
         for: 10m
         labels:
           severity: critical
           team: devops
-          slo: cicd
+          slo: deployment
         annotations:
           summary: "Change Failure Rate is {{ $value | printf \"%.1f\" }}% — exceeds 10% SLO"
           description: |
             More than 10% of production deployments in the past 7 days resulted in failure,
             rollback, or a hotfix. DORA classification has dropped from Elite/High.
             Investigate recent deployments immediately.
-          dashboard_url: "http://35.182.228.47:3000/d/dora-metrics"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/cfr-threshold-exceeded.md"
+          dashboard_url: "http://observex.duckdns.org/d/dora-metrics"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/cfr-threshold-exceeded.md"
 
       - alert: CFRThresholdWarning
-        expr: cicd:deployment_failure_rate:ratio7d * 100 > 5
+        expr: deployment_failure_rate:ratio7d * 100 > 5
         for: 10m
         labels:
           severity: warning
           team: devops
-          slo: cicd
+          slo: deployment
         annotations:
           summary: "Change Failure Rate is {{ $value | printf \"%.1f\" }}% — approaching 10% SLO threshold"
           description: |
             CFR has crossed 5%. If the trend continues it will breach the 10% SLO.
             Review recent deployments and pipeline quality.
-          dashboard_url: "http://35.182.228.47:3000/d/dora-metrics"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/cfr-threshold-exceeded.md"
+          dashboard_url: "http://observex.duckdns.org/d/dora-metrics"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/cfr-threshold-exceeded.md"
 
       # MEAN TIME TO RESTORE
       # SLO threshold: MTTR must stay below 60 minutes (3600 seconds)
 
       - alert: MTTRExceeded
-        expr: cicd:mttr_seconds:avg / 60 > 60
+        expr: deployment:mttr_seconds:avg / 60 > 60
         for: 5m
         labels:
           severity: warning
           team: devops
-          slo: cicd
+          slo: deployment
         annotations:
           summary: "MTTR is {{ $value | printf \"%.0f\" }} minutes — exceeds 60-minute SLO"
           description: |
             Average mean time to restore has exceeded the 60-minute SLO target.
             Review the incident response process — manual steps may be adding delay.
-          dashboard_url: "http://35.182.228.47:3000/d/dora-metrics"
-          runbook_url: "https://github.com/nehecodes/observeX/blob/main/runbooks/mttr-exceeded.md"
+          dashboard_url: "http://observex.duckdns.org/d/dora-metrics"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/mttr-exceeded.md"
 
       # DEPLOYMENT FREQUENCY
       # Alert when no deployments have been seen for more than 7 days (stale pipeline)
@@ -81,10 +81,11 @@ groups:
         labels:
           severity: warning
           team: devops
+          slo: deployment
         annotations:
           summary: "No deployment activity detected in the last 7 days"
           description: |
             The Pushgateway has not received any deployment metrics for 7 days.
             Either the pipeline is stalled or the metric push step is broken.
-          dashboard_url: "http://35.182.228.47:3000/d/dora-metrics"
-          runbook_url: "https://github.com/nehecodes/OobserveX/blob/main/runbooks/no-pipeline-activity.md"
+          dashboard_url: "http://observex.duckdns.org/d/dora-metrics"
+          runbook_url: "https://github.com/nehemiah-dev/observeX/blob/main/runbooks/no-pipeline-activity.md"

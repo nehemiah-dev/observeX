@@ -20,7 +20,7 @@ curl -s http://localhost:9100/metrics | grep node_cpu_seconds_total | head -5
 ```
 
 - [ ] Node Exporter running and scraping
-- [ ] Node Exporter dashboard open at `http://localhost:3000/d/node-exporter`
+- [ ] Node Exporter dashboard open at `https://observex.duckdns/d/node-exporter`
 - [ ] Prometheus Alerts page open at `http://localhost:9090/alerts`
 - [ ] Slack `#DevOps-Alerts` channel being monitored
 

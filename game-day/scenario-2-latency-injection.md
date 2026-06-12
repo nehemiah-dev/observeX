@@ -13,8 +13,8 @@ This is the most important scenario. The full drill-down path is a **non-negotia
 - [ ] All LGTP services active and healthy
 - [ ] Instrumented application is running and emitting traces
 - [ ] Loki derived field (TraceID → Tempo) is confirmed working
-- [ ] Unified Observability dashboard is open at `http://localhost:3000/d/unified-observability`
-- [ ] SLO & Error Budget dashboard is open at `http://localhost:3000/d/slo-error-budget`
+- [ ] Unified Observability dashboard is open at `https://observex.duckdns.org/d/unified-observability`
+- [ ] SLO & Error Budget dashboard is open at `https://observex.duckdns/d/slo-error-budget`
 
 ---
 
@@ -126,7 +126,7 @@ In the Loki Explore view:
 If the link does not appear:
 ```bash
 # Verify the derived field is configured correctly
-curl -s http://localhost:3000/api/datasources | python3 -m json.tool | grep -A5 "derivedFields"
+curl -s https://observex.duckdns/api/datasources | python3 -m json.tool | grep -A5 "derivedFields"
 ```
 
 **Screenshot:** Loki log line expanded, showing `traceID=` as a clickable link.  

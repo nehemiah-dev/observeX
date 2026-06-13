@@ -43,13 +43,13 @@ All services run as native Linux binaries managed by **systemd**. No Docker.
 
 ```bash
 # 1. Clone the repo to the expected path on your server
-git clone https://github.com/nehemiah-dev/observeX.git
+git clone https://github.com/nehemiah-dev/observeX.git && cd ./observeX/
 
 # 2. Set your Slack webhook URL before deploying
-sed -i "s/replace this/YOUR_SLACK_WEBHOOK_URL/" /home/admin/observeX/alertmanager/alertmanager.yml
+sed -i "s/replace this/YOUR_SLACK_WEBHOOK_URL/" ./alertmanager/alertmanager.yml
 
 # 3. Run Terraform
-cd ~/observeX/terraform
+cd terraform
 terraform init && terraform apply -auto-approve
 ```
 

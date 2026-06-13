@@ -2,7 +2,7 @@
 
 > LGTP Stack · SLOs · DORA Metrics · Burn Rate Alerting · Incident Management
 
-Built by **Vivian** and **Nehemiah** as part of the DevOps Track — Stage 6.
+Built by **Vivian** and **Nehemiah** as part of the HNG Tech internship DevOps Track — Stage 6.
 
 ---
 
